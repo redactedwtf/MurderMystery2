@@ -1,7 +1,7 @@
-local Arcane = loadstring(game:HttpGet(""))()
+local Arcane = loadstring(game:HttpGet("https://raw.githubusercontent.com/redactedwtf/MurderMystery2/refs/heads/main/Library.lua"))()
 
 local Window = Arcane:Window({
-    Name = "ARCANE",
+    Name = "larp.cc",
     User = game.Players.LocalPlayer.Name,
     Logo = "97741915311873"
 })
