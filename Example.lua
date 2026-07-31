@@ -95,5 +95,5 @@ local ThemeRight = ConfigSub:Section({ Name = "Theming", Side = 2 })
 ConfigLeft:Config()
 ThemeRight:Theming()
 
-Arcane:Notification({ Name = "ARCANE", Description = "Loaded — Right Ctrl to toggle.", Duration = 5, Icon = "check", Color = Color3.fromRGB(52, 255, 164) })
+Arcane:Notification({ Name = "larp.cc", Description = "Loaded — Right Ctrl to toggle.", Duration = 5, Icon = "check", Color = Color3.fromRGB(52, 255, 164) })
 Window:Watermark({ Title = "This is a watermark" })
