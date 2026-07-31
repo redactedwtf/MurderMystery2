@@ -25,9 +25,217 @@ local function CameraCache()
 end
 
 CameraCache();
-
 Camera:GetPropertyChangedSignal("FieldOfView"):Connect(CameraCache);
 Camera:GetPropertyChangedSignal("ViewportSize"):Connect(CameraCache);
+
+local MM2Handler = {
+    Roles = {
+        SHERIFF = "Sheriff",
+        MURDERER = "Murderer", 
+        INNOCENT = "Innocent",
+        UNKNOWN = "Unknown"
+    },
+    
+    Colors = {
+        Sheriff = Color3.fromRGB(0, 100, 255),
+        Murderer = Color3.fromRGB(255, 0, 0),
+        Innocent = Color3.fromRGB(0, 255, 0),
+        Unknown = Color3.fromRGB(255, 255, 255)
+    },
+    
+    RoleCache = {},
+    PreRoundCache = {},
+    RoundActive = false,
+    RoundStartTime = 0
+}
+
+function MM2Handler:DetectRole(Player)
+    if self.PreRoundCache[Player] and self.PreRoundCache[Player].role then
+        local cached = self.PreRoundCache[Player]
+        if os.clock() - cached.timestamp < 2 then
+            return cached.role
+        end
+    end
+    
+    local roleValues = {"Murderer", "Sheriff", "Innocent", "Role", "IsMurderer", "IsSheriff", "CurrentRole", "PlayerRole"}
+    
+    for _, valueName in ipairs(roleValues) do
+        local value = Player:FindFirstChild(valueName)
+        if value then
+            if value:IsA("BoolValue") and value.Value then
+                if valueName:find("Murderer") then
+                    return self.Roles.MURDERER
+                elseif valueName:find("Sheriff") then
+                    return self.Roles.SHERIFF
+                end
+            elseif value:IsA("StringValue") then
+                local roleText = value.Value:lower()
+                if roleText:find("murderer") then
+                    return self.Roles.MURDERER
+                elseif roleText:find("sheriff") then
+                    return self.Roles.SHERIFF
+                elseif roleText:find("innocent") then
+                    return self.Roles.INNOCENT
+                end
+            elseif value:IsA("ObjectValue") and value.Value == Player then
+                if valueName:find("Murderer") then
+                    return self.Roles.MURDERER
+                elseif valueName:find("Sheriff") then
+                    return self.Roles.SHERIFF
+                end
+            end
+        end
+    end
+    
+    local backpack = Player:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            local itemName = item.Name:lower()
+            if itemName:find("knife") or itemName:find("murder") or itemName:find("blade") then
+                return self.Roles.MURDERER
+            elseif itemName:find("gun") or itemName:find("sheriff") or itemName:find("revolver") or itemName:find("pistol") then
+                return self.Roles.SHERIFF
+            end
+        end
+    end
+    
+    if Player.Character then
+        for _, item in ipairs(Player.Character:GetChildren()) do
+            if item:IsA("Tool") then
+                local itemName = item.Name:lower()
+                if itemName:find("knife") or itemName:find("murder") or itemName:find("blade") then
+                    return self.Roles.MURDERER
+                elseif itemName:find("gun") or itemName:find("sheriff") or itemName:find("revolver") or itemName:find("pistol") then
+                    return self.Roles.SHERIFF
+                end
+            end
+        end
+    end
+    
+    local playerGui = Player:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, screenGui in ipairs(playerGui:GetChildren()) do
+            if screenGui:IsA("ScreenGui") then
+                for _, element in ipairs(screenGui:GetDescendants()) do
+                    if element:IsA("TextLabel") or element:IsA("TextButton") then
+                        local text = element.Text:lower()
+                        if text:find("murderer") and text:find(Player.Name:lower()) then
+                            return self.Roles.MURDERER
+                        elseif text:find("sheriff") and text:find(Player.Name:lower()) then
+                            return self.Roles.SHERIFF
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    local gameValues = Workspace:FindFirstChild("GameValues") or 
+                      Workspace:FindFirstChild("Values") or 
+                      Workspace:FindFirstChild("GameData")
+    
+    if gameValues then
+        local murdererValue = gameValues:FindFirstChild("Murderer") or gameValues:FindFirstChild("CurrentMurderer")
+        local sheriffValue = gameValues:FindFirstChild("Sheriff") or gameValues:FindFirstChild("CurrentSheriff")
+        
+        if murdererValue then
+            if murdererValue:IsA("ObjectValue") and murdererValue.Value == Player then
+                return self.Roles.MURDERER
+            elseif murdererValue:IsA("StringValue") and murdererValue.Value == Player.Name then
+                return self.Roles.MURDERER
+            end
+        end
+        
+        if sheriffValue then
+            if sheriffValue:IsA("ObjectValue") and sheriffValue.Value == Player then
+                return self.Roles.SHERIFF
+            elseif sheriffValue:IsA("StringValue") and sheriffValue.Value == Player.Name then
+                return self.Roles.SHERIFF
+            end
+        end
+    end
+    
+    if Player.Character then
+        for _, child in ipairs(Player.Character:GetChildren()) do
+            if child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
+                for _, element in ipairs(child:GetDescendants()) do
+                    if element:IsA("TextLabel") then
+                        local text = element.Text:lower()
+                        if text:find("murderer") then
+                            return self.Roles.MURDERER
+                        elseif text:find("sheriff") then
+                            return self.Roles.SHERIFF
+                        elseif text:find("innocent") then
+                            return self.Roles.INNOCENT
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return self.Roles.UNKNOWN
+end
+
+function MM2Handler:DetectPreRoundRoles()
+    local preRoundData = {}
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local role = self:DetectRole(player)
+            preRoundData[player] = {
+                role = role,
+                timestamp = os.clock(),
+                confidence = role ~= self.Roles.UNKNOWN and 1 or 0
+            }
+        end
+    end
+    
+    self.PreRoundCache = preRoundData
+    return preRoundData
+end
+
+function MM2Handler:GetPlayerRole(Player)
+    if self.RoleCache[Player] then
+        local cachedRole = self.RoleCache[Player]
+        if os.clock() - cachedRole.timestamp < 0.5 then
+            return cachedRole.role
+        end
+    end
+    
+    local role = self:DetectRole(Player)
+    
+    self.RoleCache[Player] = {
+        role = role,
+        timestamp = os.clock()
+    }
+    
+    return role
+end
+
+function MM2Handler:GetRoleColor(Role)
+    return self.Colors[Role] or self.Colors.Unknown
+end
+
+function MM2Handler:ShouldShowPlayer(Role, Settings)
+    if not Settings['Enabled'] then return true end
+    
+    if Role == self.Roles.SHERIFF and not Settings['ShowSheriff'] then return false
+    elseif Role == self.Roles.MURDERER and not Settings['ShowMurderer'] then return false
+    elseif Role == self.Roles.INNOCENT and not Settings['ShowInnocent'] then return false
+    elseif Role == self.Roles.UNKNOWN and not Settings['ShowUnknown'] then return false
+    end
+    
+    return true
+end
+
+function MM2Handler:SyncColors()
+    local settings = getgenv().Library.Table['MM2Settings']
+    self.Colors.Sheriff = settings['SheriffColor']
+    self.Colors.Murderer = settings['MurdererColor']
+    self.Colors.Innocent = settings['InnocentColor']
+    self.Colors.Unknown = settings['UnknownColor']
+end
 
 getgenv().Library = {
     ['Directory'] = 'Esp',
@@ -35,6 +243,8 @@ getgenv().Library = {
     ['Holder'] = nil,
     ['Threads'] = {},
     ['Connections'] = {},
+    ['MM2Handler'] = MM2Handler,
+    ['Tracers'] = {},
 
     ['Table'] = {
         ['Enabled'] = true,
@@ -45,20 +255,34 @@ getgenv().Library = {
         ['FontSize'] = 12,
         ['FontType'] = 'none',
 
+        ['Tracers'] = {
+            ['Enabled'] = true,
+            ['Transparency'] = 0.5,
+            ['Thickness'] = 1,
+            ['Color'] = Color3.fromRGB(255, 255, 255),
+            ['UseRoleColors'] = true,
+            ['Origin'] = "Bottom",
+        },
+
         ['MM2Settings'] = {
             ['Enabled'] = true,
             ['ShowSheriff'] = true,
             ['ShowMurderer'] = true,
             ['ShowInnocent'] = true,
+            ['ShowUnknown'] = true,
             ['ShowRoleText'] = true,
-            ['SheriffColor'] = Color3.fromRGB(0, 100, 255), -- Blue for Sheriff
-            ['MurdererColor'] = Color3.fromRGB(255, 0, 0), -- Red for Murderer
-            ['InnocentColor'] = Color3.fromRGB(0, 255, 0), -- Green for Innocent
-            ['UnknownColor'] = Color3.fromRGB(255, 255, 255), -- White for Unknown
+            ['UseRoleColors'] = true,
+            ['ColorEntireESP'] = true,
+            ['PreRoundDetection'] = true,
+            ['SheriffColor'] = Color3.fromRGB(0, 100, 255),
+            ['MurdererColor'] = Color3.fromRGB(255, 0, 0),
+            ['InnocentColor'] = Color3.fromRGB(0, 255, 0),
+            ['UnknownColor'] = Color3.fromRGB(255, 255, 255),
+            ['RoleDetectionInterval'] = 0.5,
         },
 
         ['TeamCheck'] = {
-            ['Enabled'] = false, -- Disabled by default for MM2 since roles matter more than teams
+            ['Enabled'] = false,
             ['ShowTeammates'] = true,
         },
 
@@ -149,145 +373,21 @@ getgenv().Library = {
 }
 
 local Table = Library['Table'];
-
--- MM2 Role Detection Functions
-local MM2Functions = {}
-
-function MM2Functions.GetPlayerRole(Player)
-    -- Method 1: Check for role values in the player
-    local role = nil
-    
-    -- Check for common MM2 role indicators
-    if Player:FindFirstChild("Murderer") then
-        role = "Murderer"
-    elseif Player:FindFirstChild("Sheriff") then
-        role = "Sheriff"
-    elseif Player:FindFirstChild("Innocent") then
-        role = "Innocent"
-    end
-    
-    -- Method 2: Check Backpack for role items
-    if not role and Player:FindFirstChild("Backpack") then
-        local backpack = Player.Backpack
-        for _, item in ipairs(backpack:GetChildren()) do
-            local itemName = item.Name:lower()
-            if itemName:find("knife") or itemName:find("murder") then
-                role = "Murderer"
-                break
-            elseif itemName:find("gun") or itemName:find("sheriff") or itemName:find("revolver") then
-                role = "Sheriff"
-                break
-            end
-        end
-    end
-    
-    -- Method 3: Check Character for role items
-    if not role and Player.Character then
-        for _, item in ipairs(Player.Character:GetChildren()) do
-            if item:IsA("Tool") then
-                local itemName = item.Name:lower()
-                if itemName:find("knife") or itemName:find("murder") then
-                    role = "Murderer"
-                    break
-                elseif itemName:find("gun") or itemName:find("sheriff") or itemName:find("revolver") then
-                    role = "Sheriff"
-                    break
-                end
-            end
-        end
-    end
-    
-    -- Method 4: Check for role GUI or values
-    if not role then
-        local playerGui = Player:FindFirstChild("PlayerGui")
-        if playerGui then
-            -- Check common MM2 GUI elements
-            local roleGui = playerGui:FindFirstChild("Role") or 
-                           playerGui:FindFirstChild("MurdererGUI") or 
-                           playerGui:FindFirstChild("SheriffGUI")
-            if roleGui then
-                if roleGui.Name:find("Murderer") then
-                    role = "Murderer"
-                elseif roleGui.Name:find("Sheriff") then
-                    role = "Sheriff"
-                end
-            end
-        end
-    end
-    
-    -- Method 5: Check workspace for role indicators
-    if not role then
-        -- Some MM2 scripts use workspace values
-        local gameValues = Workspace:FindFirstChild("GameValues") or Workspace:FindFirstChild("Values")
-        if gameValues then
-            local murdererValue = gameValues:FindFirstChild("Murderer")
-            local sheriffValue = gameValues:FindFirstChild("Sheriff")
-            
-            if murdererValue and murdererValue.Value == Player then
-                role = "Murderer"
-            elseif sheriffValue and sheriffValue.Value == Player then
-                role = "Sheriff"
-            end
-        end
-    end
-    
-    return role or "Unknown"
-end
-
-function MM2Functions.GetRoleColor(Role)
-    local mm2Settings = Table['MM2Settings']
-    
-    if Role == "Sheriff" then
-        return mm2Settings['SheriffColor']
-    elseif Role == "Murderer" then
-        return mm2Settings['MurdererColor']
-    elseif Role == "Innocent" then
-        return mm2Settings['InnocentColor']
-    else
-        return mm2Settings['UnknownColor']
-    end
-end
-
-function MM2Functions.ShouldShowPlayer(Role)
-    local mm2Settings = Table['MM2Settings']
-    
-    if not mm2Settings['Enabled'] then
-        return true
-    end
-    
-    if Role == "Sheriff" and not mm2Settings['ShowSheriff'] then
-        return false
-    elseif Role == "Murderer" and not mm2Settings['ShowMurderer'] then
-        return false
-    elseif Role == "Innocent" and not mm2Settings['ShowInnocent'] then
-        return false
-    end
-    
-    return true
-end
+MM2Handler:SyncColors()
 
 local Fonts = {}; do
     local function FontsRegister(Name, Weight, Style, Asset)
-        if not isfile(Asset.Id) then
-            writefile(Asset.Id, Asset.Font)
-        end
-
-        if isfile(Name .. ".font") then
-            delfile(Name .. ".font")
-        end
-
+        if not isfile(Asset.Id) then writefile(Asset.Id, Asset.Font) end
+        if isfile(Name .. ".font") then delfile(Name .. ".font") end
         local Info = {
             name = Name,
-            faces = {
-                {
-                    name = "Normal",
-                    weight = Weight,
-                    style = Style,
-                    assetId = getcustomasset(Asset.Id),
-                },
-            },
+            faces = {{
+                name = "Normal",
+                weight = Weight,
+                style = Style,
+                assetId = getcustomasset(Asset.Id),
+            }},
         }
-
         writefile(Name .. ".font", HttpService:JSONEncode(Info))
         return getcustomasset(Name .. ".font")
     end;
@@ -328,11 +428,9 @@ Library.__index = Library;
 
 function Library:CreateObjects(Name, Prop)
     local New = Instance.new(Name);
-
     for Property, Value in Prop or {} do
         New[Property] = Value;
     end;
-            
     return New;
 end
 
@@ -356,6 +454,25 @@ function Library:InitEsp(Data)
     local Objects = Data.Objects
 
     do
+        Objects["TracerLine"] = self:CreateObjects("Frame", {
+            Parent = self.Holder,
+            Visible = false,
+            BackgroundTransparency = 0,
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+            BorderSizePixel = 0,
+            Size = Dim2(0, 1, 0, 0),
+            Position = Dim2(0, 0, 0, 0),
+            ZIndex = 1,
+        })
+
+        Objects["TracerGradient"] = self:CreateObjects("UIGradient", {
+            Parent = Objects["TracerLine"],
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 0.5),
+            }),
+        })
+
         Objects["TargetHolder"] = self:CreateObjects("Frame", {
             Parent = self.Holder,
             Visible = false,
@@ -573,40 +690,13 @@ function Library:InitEsp(Data)
     end
 
     do
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["TopTextHolder"],
-            PaddingBottom = Dim(0, 0),
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["BottomTextHolder"],
-            PaddingTop = Dim(0, -1)
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["LeftTextHolder"],
-            PaddingTop = Dim(0, -3),
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["RightTextHolder"],
-            PaddingTop = Dim(0, -3),
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["LeftBarHolder"],
-            PaddingRight = Dim(0, 0),
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["BottomBarHolder"],
-            PaddingTop = Dim(0, 2),
-        })
-
-        self:CreateObjects("UIPadding", {
-            Parent = Objects["LeftHolder"],
-            PaddingRight = Dim(0, 1),
-        })
+        self:CreateObjects("UIPadding", {Parent = Objects["TopTextHolder"], PaddingBottom = Dim(0, 0)})
+        self:CreateObjects("UIPadding", {Parent = Objects["BottomTextHolder"], PaddingTop = Dim(0, -1)})
+        self:CreateObjects("UIPadding", {Parent = Objects["LeftTextHolder"], PaddingTop = Dim(0, -3)})
+        self:CreateObjects("UIPadding", {Parent = Objects["RightTextHolder"], PaddingTop = Dim(0, -3)})
+        self:CreateObjects("UIPadding", {Parent = Objects["LeftBarHolder"], PaddingRight = Dim(0, 0)})
+        self:CreateObjects("UIPadding", {Parent = Objects["BottomBarHolder"], PaddingTop = Dim(0, 2)})
+        self:CreateObjects("UIPadding", {Parent = Objects["LeftHolder"], PaddingRight = Dim(0, 1)})
     end
 
     do
@@ -907,7 +997,6 @@ function Library:InitEsp(Data)
             LineJoinMode = Enum.LineJoinMode.Miter,
         })
 
-        -- MM2 Role Text
         Objects["RoleText"] = self:CreateObjects("TextLabel", {
             Parent = Objects["TopTextHolder"],
             FontFace = Library.TahomaBold,
@@ -1055,25 +1144,16 @@ local CornerLayout = {
 
 function Library:CalculateBox(Data)
     local RootPart = Data['RootPart']
-
-    if not RootPart then
-        return nil, nil, nil, nil, false;
-    end;
+    if not RootPart then return nil, nil, nil, nil, false; end;
 
     local RootScreen, OnScreen = WorldToViewportPoint(Camera, RootPart.Position)
-
-    if not OnScreen then
-        return nil, nil, nil, nil, false;
-    end;
+    if not OnScreen then return nil, nil, nil, nil, false; end;
 
     local BoundingBox = Table['Boxes']['Bounding Box'];
 
     if Table['Boxes']['DynamicBoxes'] then
         local Children = Data['Children'];
-
-        if not Children then
-            return nil, nil, nil, nil, false;
-        end;
+        if not Children then return nil, nil, nil, nil, false; end;
 
         local IncludeAccessories = Data['IncludeAccessories'];
         local ScrMinX, ScrMinY = Huge, Huge;
@@ -1083,23 +1163,13 @@ function Library:CalculateBox(Data)
         for _, Part in Children do
             if Part:IsA('BasePart') and Part.Transparency ~= 1 and Part ~= RootPart then
                 local Parent = Part.Parent
-
-                if Parent == nil then
-                    continue
-                end
-
-                if not IncludeAccessories and Parent:IsA('Accessory') then
-                    continue;
-                end;
+                if Parent == nil then continue end
+                if not IncludeAccessories and Parent:IsA('Accessory') then continue; end;
 
                 local PartScreen, PartOnScreen = WorldToViewportPoint(Camera, Part.Position);
-
-                if not PartOnScreen or PartScreen.Z <= 0 then
-                    continue;
-                end;
+                if not PartOnScreen or PartScreen.Z <= 0 then continue; end;
 
                 HasValidParts = true;
-
                 local Cf = Part.CFrame;
                 local Sz = Part.Size;
                 local HX, HY, HZ = Sz.X * 0.5, Sz.Y * 0.5, Sz.Z * 0.5;
@@ -1119,15 +1189,12 @@ function Library:CalculateBox(Data)
             end;
         end;
 
-        if not HasValidParts then
-            return nil, nil, nil, nil, false;
-        end;
+        if not HasValidParts then return nil, nil, nil, nil, false; end;
 
         local PadX = BoundingBox['BoxX'];
         local PadY = BoundingBox['BoxY'];
         local W = (ScrMaxX - ScrMinX) + PadX;
         local H = (ScrMaxY - ScrMinY) + PadY;
-
         return W, H, ScrMinX - (PadX * 0.5), ScrMinY - (PadY * 0.5), true;
     else
         local Scale = (RootPart.Size.Y * ViewPortY) / (RootScreen.Z * 2);
@@ -1137,13 +1204,8 @@ function Library:CalculateBox(Data)
 end
 
 function Library:AddTarget(Player)
-    if Player == LocalPlayer and not Table['ShowLocalPlayer'] then
-        return
-    end;
-
-    if self.Cache[Player] then
-        return
-    end;
+    if Player == LocalPlayer and not Table['ShowLocalPlayer'] then return end;
+    if self.Cache[Player] then return end;
 
     local Data = {
         ['Player'] = Player,
@@ -1195,180 +1257,137 @@ function Library:AddTarget(Player)
         ['LastWeapon'] = nil,
         ['LastWeaponColor'] = nil,
         ['IsTeammate'] = false,
-        ['MM2Role'] = 'Unknown',
+        ['MM2Role'] = MM2Handler.Roles.UNKNOWN,
         ['LastRole'] = nil,
+        ['RoleColor'] = MM2Handler.Colors.Unknown,
+        ['LastColorUpdate'] = 0,
+        ['TracerFrom'] = nil,
+        ['TracerTo'] = nil,
+        ['LastTracerColor'] = nil,
     }
+    
     self:InitEsp(Data);
     self['Cache'][Player] = Data;
 
+    if Table['MM2Settings']['PreRoundDetection'] then
+        Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
+    end
+
+    Data['Conns']['RoleUpdate'] = RunService.Heartbeat:Connect(function()
+        if Data['Alive'] then
+            local now = os.clock()
+            if now - Data['LastColorUpdate'] >= Table['MM2Settings']['RoleDetectionInterval'] then
+                local newRole = MM2Handler:GetPlayerRole(Player)
+                if Data['MM2Role'] ~= newRole then
+                    Data['MM2Role'] = newRole
+                    Data['RoleColor'] = MM2Handler:GetRoleColor(newRole)
+                end
+                Data['LastColorUpdate'] = now
+            end
+        end
+    end)
+
     local HealthHandler = {}; do
         function HealthHandler.BindHealth(Humanoid)
-            if Data['Conns']['Health'] then
-                Data['Conns']['Health']:Disconnect()
-            end
-
-            if Data['Conns']['Died'] then
-                Data['Conns']['Died']:Disconnect()
-            end
-
+            if Data['Conns']['Health'] then Data['Conns']['Health']:Disconnect() end
+            if Data['Conns']['Died'] then Data['Conns']['Died']:Disconnect() end
             Data['Humanoid'] = Humanoid
             Data['Health'] = Humanoid.Health
             Data['MaxHealth'] = Humanoid.MaxHealth
             Data['Alive'] = Humanoid.Health > 0
-
             Data['Conns']['Health'] = Humanoid.HealthChanged:Connect(function(NewHealth)
                 Data['Alive'] = NewHealth > 0
                 Data['Health'] = NewHealth
             end)
-
             Data['Conns']['Died'] = Humanoid.Died:Connect(function()
                 Data['Alive'] = false
             end)
         end
-
         Data['BindHealth'] = HealthHandler.BindHealth;
     end
 
     local ToolHandler = {}; do
         function ToolHandler.BindTool(Character)
-            if Data['Conns']['ToolAdded'] then
-                Data['Conns']['ToolAdded']:Disconnect()
-            end
-
-            if Data['Conns']['ToolRemoved'] then
-                Data['Conns']['ToolRemoved']:Disconnect()
-            end
-
+            if Data['Conns']['ToolAdded'] then Data['Conns']['ToolAdded']:Disconnect() end
+            if Data['Conns']['ToolRemoved'] then Data['Conns']['ToolRemoved']:Disconnect() end
             if Data['Children'] then
                 for _, Child in Data['Children'] do
-                    if Child:IsA('Tool') then
-                        Data['CurrentTool'] = Child.Name
-                        break
-                    end
+                    if Child:IsA('Tool') then Data['CurrentTool'] = Child.Name; break end
                 end
             end
-
             Data['Conns']['ToolAdded'] = Character.ChildAdded:Connect(function(Child)
                 if Child:IsA('Tool') then
                     Data['CurrentTool'] = Child.Name
-                    -- Update MM2 role when tool changes
-                    Data['MM2Role'] = MM2Functions.GetPlayerRole(Player)
+                    Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
                 end
             end)
-
             Data['Conns']['ToolRemoved'] = Character.ChildRemoved:Connect(function(Child)
                 if Child:IsA('Tool') then
                     Data['CurrentTool'] = nil
-                    -- Update MM2 role when tool is removed
-                    Data['MM2Role'] = MM2Functions.GetPlayerRole(Player)
+                    Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
                 end
             end)
         end
-
         Data['BindTool'] = ToolHandler.BindTool
     end
 
     local ChildHandler = {}; do
         function ChildHandler.BindChildren(Character)
-            if Data['Conns']['ChildAdded'] then
-                Data['Conns']['ChildAdded']:Disconnect();
-            end;
-
-            if Data['Conns']['ChildRemoved'] then
-                Data['Conns']['ChildRemoved']:Disconnect();
-            end;
-
+            if Data['Conns']['ChildAdded'] then Data['Conns']['ChildAdded']:Disconnect(); end;
+            if Data['Conns']['ChildRemoved'] then Data['Conns']['ChildRemoved']:Disconnect(); end;
             local Children = Character:GetChildren();
             Data['Children'] = Children;
-
             Data['Conns']['ChildAdded'] = Character.ChildAdded:Connect(function(Child)
                 Children[#Children + 1] = Child;
-                -- Update MM2 role when new child is added
-                Data['MM2Role'] = MM2Functions.GetPlayerRole(Player)
+                Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
             end)
-
             Data['Conns']['ChildRemoved'] = Character.ChildRemoved:Connect(function(Child)
                 for I = #Children, 1, -1 do
-                    if Children[I] == Child then
-                        Remove(Children, I);
-                        break;
-                    end;
+                    if Children[I] == Child then Remove(Children, I); break; end;
                 end
-                -- Update MM2 role when child is removed
-                Data['MM2Role'] = MM2Functions.GetPlayerRole(Player)
+                Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
             end)
-
             Data['BindTool'](Character);
         end
-
         Data['BindChildren'] = ChildHandler.BindChildren;
     end
 
     local FlagsHandler = {}; do
         function FlagsHandler.BindFlags(Humanoid)
-            if Data['Conns']['MoveDir'] then
-                Data['Conns']['MoveDir']:Disconnect();
-            end;
-
-            if Data['Conns']['StateChange'] then
-                Data['Conns']['StateChange']:Disconnect();
-            end;
-
+            if Data['Conns']['MoveDir'] then Data['Conns']['MoveDir']:Disconnect(); end;
+            if Data['Conns']['StateChange'] then Data['Conns']['StateChange']:Disconnect(); end;
             local Objects = Data['Objects']
             Data['JumpActive'] = false;
             Data['WalkActive'] = false;
             Data['FallingActive'] = false;
             Data['SwimmingActive'] = false;
-
             Objects['WalkFlag'].Visible = false;
             Objects['JumpFlag'].Visible = false;
             Objects['SwimmingFlag'].Visible = false;
-
             Data['Conns']['MoveDir'] = Humanoid:GetPropertyChangedSignal('MoveDirection'):Connect(function()
                 local Walking = Humanoid.MoveDirection ~= ZeroVector3;
-
                 if Walking and not Data['WalkActive'] then
                     Data['WalkActive'] = true;
-
-                    if Data['JumpActive'] then
-                        Objects['WalkFlag'].LayoutOrder = 2;
-                    else
-                        Objects['WalkFlag'].LayoutOrder = 1;
-                        Objects['JumpFlag'].LayoutOrder = 2;
-                    end
-
+                    if Data['JumpActive'] then Objects['WalkFlag'].LayoutOrder = 2;
+                    else Objects['WalkFlag'].LayoutOrder = 1; Objects['JumpFlag'].LayoutOrder = 2; end
                     Objects['WalkFlag'].Visible = Table['Flags']['Walking']['Enabled']
                 elseif not Walking and Data['WalkActive'] then
                     Data['WalkActive'] = false;
                     Objects['WalkFlag'].Visible = false;
-
-                    if Data['JumpActive'] then
-                        Objects['JumpFlag'].LayoutOrder = 1;
-                    end
+                    if Data['JumpActive'] then Objects['JumpFlag'].LayoutOrder = 1; end
                 end
             end)
-
             Data['Conns']['StateChange'] = Humanoid.StateChanged:Connect(function(_, NewState)
                 if NewState == Enum.HumanoidStateType.Freefall and not Data['JumpActive'] then
                     Data['JumpActive'] = true;
-
-                    if Data['WalkActive'] then
-                        Objects['JumpFlag'].LayoutOrder = 2;
-                    else
-                        Objects['JumpFlag'].LayoutOrder = 1;
-                        Objects['WalkFlag'].LayoutOrder = 2;
-                    end
-
+                    if Data['WalkActive'] then Objects['JumpFlag'].LayoutOrder = 2;
+                    else Objects['JumpFlag'].LayoutOrder = 1; Objects['WalkFlag'].LayoutOrder = 2; end
                     Objects['JumpFlag'].Visible = Table['Flags']['Jumping']['Enabled']
                 elseif NewState ~= Enum.HumanoidStateType.Jumping and Data['JumpActive'] then
                     Data['JumpActive'] = false;
                     Objects['JumpFlag'].Visible = false;
-
-                    if Data['WalkActive'] then
-                        Objects['WalkFlag'].LayoutOrder = 1;
-                    end
+                    if Data['WalkActive'] then Objects['WalkFlag'].LayoutOrder = 1; end
                 end
-
                 if NewState == Enum.HumanoidStateType.Swimming and not Data['SwimmingActive'] then
                     Data['SwimmingActive'] = true;
                     Objects['SwimmingFlag'].Visible = Table['Flags']['Swimming']['Enabled']
@@ -1378,7 +1397,6 @@ function Library:AddTarget(Player)
                 end
             end)
         end
-
         Data['BindFlags'] = FlagsHandler.BindFlags;
     end
 
@@ -1393,156 +1411,152 @@ function Library:AddTarget(Player)
             Data['JumpActive'] = false;
             Data['FallingActive'] = false;
             Data['SwimmingActive'] = false;
-
-            if not Character or not Character.Parent then
-                return;
-            end;
-
+            if not Character or not Character.Parent then return; end;
             local RootPart = FindFirstChild(Character, "HumanoidRootPart");
-
-            if not RootPart then
-                RootPart = Character:WaitForChild('HumanoidRootPart', 10);
-            end
-
+            if not RootPart then RootPart = Character:WaitForChild('HumanoidRootPart', 10); end
             local Humanoid = FindFirstChildOfClass(Character, 'Humanoid');
-
-            if not Humanoid then
-                Humanoid = Character:WaitForChild('Humanoid', 10);
-            end;
-
-            if not RootPart or not Humanoid then
-                return;
-            end;
-
-            if not Character.Parent then
-                return;
-            end;
-
+            if not Humanoid then Humanoid = Character:WaitForChild('Humanoid', 10); end;
+            if not RootPart or not Humanoid then return; end;
+            if not Character.Parent then return; end;
             Data['RootPart'] = RootPart;
             Data['Humanoid'] = Humanoid;
-
-            -- Get initial MM2 role
-            Data['MM2Role'] = MM2Functions.GetPlayerRole(Player)
-
+            Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
             Data['BindChildren'](Character);
             Data['BindHealth'](Humanoid);
             Data['BindFlags'](Humanoid);
         end
-
         Data['Conns']['CharAdded'] = Player.CharacterAdded:Connect(function(Character)
             task.defer(CharacterHandler.OnCharacter, Character)
         end)
-
         if Player.Character and Player.Character.Parent then
             task.defer(CharacterHandler.OnCharacter, Player.Character)
         end
     end
-    
-    -- Add role update connection
-    Data['Conns']['RoleUpdate'] = RunService.Heartbeat:Connect(function()
-        if Data['Alive'] then
-            local newRole = MM2Functions.GetPlayerRole(Player)
-            if Data['MM2Role'] ~= newRole then
-                Data['MM2Role'] = newRole
-            end
-        end
-    end)
 end
 
 function Library:RemoveTarget(Player)
     local Data = self['Cache'][Player];
-
-    if not Data then
-        return;
-    end;
-
-    for _, Connections in Data['Conns'] do
-        Connections:Disconnect()
-    end;
-
+    if not Data then return; end;
+    for _, Connections in Data['Conns'] do Connections:Disconnect() end;
     Clear(Data['Conns']);
-
-    if Data['Objects']['TargetHolder'] then
-        Data['Objects']['TargetHolder']:Destroy();
-    end;
-
+    if Data['Objects']['TargetHolder'] then Data['Objects']['TargetHolder']:Destroy(); end;
     Clear(Data['Objects']);
     self['Cache'][Player] = nil;
 end
 
-function Library:Update(Player, Data)
+function Library:UpdateTracer(Data, ScreenPos)
     local Objects = Data['Objects']
-
-    -- MM2 Role Check
-    if Table['MM2Settings']['Enabled'] then
-        if not MM2Functions.ShouldShowPlayer(Data['MM2Role']) then
-            if Objects['TargetHolder'].Visible then
-                Objects['TargetHolder'].Visible = false
-            end
-            return
-        end
-    end
-
-    -- Team Check (disabled by default for MM2)
-    if Table['TeamCheck']['Enabled'] then
-        Data['IsTeammate'] = LocalPlayer.Team == Player.Team and Player.Team ~= nil
-        if not Table['TeamCheck']['ShowTeammates'] and Data['IsTeammate'] then
-            if Objects['TargetHolder'].Visible then
-                Objects['TargetHolder'].Visible = false
-            end
-            return
-        end
-    end
-
-    if not Data['RootPart'] then
-        if Objects['TargetHolder'].Visible then
-            Objects['TargetHolder'].Visible = false
+    local TracerCfg = Table['Tracers']
+    
+    if not TracerCfg['Enabled'] then
+        if Objects['TracerLine'].Visible then
+            Objects['TracerLine'].Visible = false
         end
         return
     end
+    
+    local tracerColor = Data['RoleColor']
+    if not TracerCfg['UseRoleColors'] or not Table['MM2Settings']['Enabled'] then
+        tracerColor = TracerCfg['Color']
+    end
+    
+    local viewportSize = Camera.ViewportSize
+    local tracerOrigin
+    
+    if TracerCfg['Origin'] == "Bottom" then
+        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y)
+    elseif TracerCfg['Origin'] == "Top" then
+        tracerOrigin = NewVector2(viewportSize.X / 2, 0)
+    elseif TracerCfg['Origin'] == "Center" then
+        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y / 2)
+    else
+        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y)
+    end
+    
+    local targetPos = NewVector2(ScreenPos.X, ScreenPos.Y)
+    local direction = targetPos - tracerOrigin
+    local length = direction.Magnitude
+    
+    if length <= 0 then
+        Objects['TracerLine'].Visible = false
+        return
+    end
+    
+    local angle = math.deg(math.atan2(direction.Y, direction.X))
+    
+    Objects['TracerLine'].Visible = true
+    Objects['TracerLine'].BackgroundColor3 = tracerColor
+    Objects['TracerLine'].BackgroundTransparency = TracerCfg['Transparency']
+    
+    Objects['TracerLine'].Position = Dim2(0, tracerOrigin.X, 0, tracerOrigin.Y)
+    Objects['TracerLine'].Size = Dim2(0, length, 0, TracerCfg['Thickness'])
+    Objects['TracerLine'].Rotation = angle
+    
+    Objects['TracerGradient'].Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, TracerCfg['Transparency']),
+        NumberSequenceKeypoint.new(1, 0.9),
+    })
+end
 
-    if not Data['Alive'] then
-        if Objects['TargetHolder'].Visible then
-            Objects['TargetHolder'].Visible = false
+function Library:Update(Player, Data)
+    local Objects = Data['Objects']
+    local mm2Settings = Table['MM2Settings']
+    
+    Data['RoleColor'] = MM2Handler:GetRoleColor(Data['MM2Role'])
+    
+    if mm2Settings['Enabled'] then
+        if not MM2Handler:ShouldShowPlayer(Data['MM2Role'], mm2Settings) then
+            if Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = false end
+            if Objects['TracerLine'].Visible then Objects['TracerLine'].Visible = false end
+            return
         end
+    end
+
+    if Table['TeamCheck']['Enabled'] then
+        Data['IsTeammate'] = LocalPlayer.Team == Player.Team and Player.Team ~= nil
+        if not Table['TeamCheck']['ShowTeammates'] and Data['IsTeammate'] then
+            if Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = false end
+            if Objects['TracerLine'].Visible then Objects['TracerLine'].Visible = false end
+            return
+        end
+    end
+
+    if not Data['RootPart'] or not Data['Alive'] then
+        if Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = false end
+        if Objects['TracerLine'].Visible then Objects['TracerLine'].Visible = false end
         return
     end
 
     local RootPos = Data['RootPart'].Position
     local Distance = Floor((CameraPosition - RootPos).Magnitude)
-
+    
     if Distance > Table['Distance'] then
-        if Objects['TargetHolder'].Visible then
-            Objects['TargetHolder'].Visible = false
-        end
+        if Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = false end
+        if Objects['TracerLine'].Visible then Objects['TracerLine'].Visible = false end
         return
     end
 
-    local W, H, X, Y, OnScreen = self:CalculateBox(Data)
-
+    local RootScreen, OnScreen = WorldToViewportPoint(Camera, RootPos)
+    local W, H, X, Y, OnScreenBox = self:CalculateBox(Data)
+    
     if not OnScreen or not W then
-        if Objects['TargetHolder'].Visible then
-            Objects['TargetHolder'].Visible = false
-        end
+        if Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = false end
+        if Objects['TracerLine'].Visible then Objects['TracerLine'].Visible = false end
         return
     end
 
-    W = Floor(W)
-    H = Floor(H)
-    X = Floor(X)
-    Y = Floor(Y)
-
-    if not Objects['TargetHolder'].Visible then
-        Objects['TargetHolder'].Visible = true
-    end
+    W = Floor(W); H = Floor(H); X = Floor(X); Y = Floor(Y)
+    
+    if not Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = true end
+    
+    self:UpdateTracer(Data, RootScreen)
 
     local DirtySizes = Data['LastW'] ~= W or Data['LastH'] ~= H
     local DirtyPosition = Data['LastX'] ~= X or Data['LastY'] ~= Y
 
     if DirtyPosition then
         Objects['TargetHolder'].Position = DimOffset(X, Y)
-        Data['LastX'] = X
-        Data['LastY'] = Y
+        Data['LastX'] = X; Data['LastY'] = Y
     end
 
     if DirtySizes then
@@ -1552,256 +1566,140 @@ function Library:Update(Player, Data)
         Objects['BoxInlineHolder'].Size = DimOffset(W + 2, H + 2)
         Objects['BoxFill'].Size = DimOffset(W, H)
         Objects['CornerHolder'].Size = DimOffset(W + 2, H + 2)
-        Data['LastW'] = W
-        Data['LastH'] = H
+        Data['LastW'] = W; Data['LastH'] = H
     end
 
-    -- Update MM2 Role Display
-    if Table['MM2Settings']['Enabled'] and Table['MM2Settings']['ShowRoleText'] then
-        if not Objects['RoleText'].Visible then
-            Objects['RoleText'].Visible = true
-        end
-        
+    local useRoleColors = mm2Settings['Enabled'] and mm2Settings['UseRoleColors'] and mm2Settings['ColorEntireESP']
+    local activeColor = useRoleColors and Data['RoleColor'] or nil
+
+    if mm2Settings['Enabled'] and mm2Settings['ShowRoleText'] then
+        if not Objects['RoleText'].Visible then Objects['RoleText'].Visible = true end
         if Data['LastRole'] ~= Data['MM2Role'] then
             Objects['RoleText'].Text = "[" .. Data['MM2Role'] .. "]"
-            Objects['RoleText'].TextColor3 = MM2Functions.GetRoleColor(Data['MM2Role'])
+            Objects['RoleText'].TextColor3 = Data['RoleColor']
             Data['LastRole'] = Data['MM2Role']
         end
     else
-        if Objects['RoleText'].Visible then
-            Objects['RoleText'].Visible = false
-        end
+        if Objects['RoleText'].Visible then Objects['RoleText'].Visible = false end
     end
 
     local BoxesCfg = Table['Boxes']
-    local TextsCfg = Table['Texts']
+    if BoxesCfg['Enabled'] then
+        local glowTop = activeColor or BoxesCfg['Box Glow']['Top']
+        local glowBot = activeColor and Color3.fromRGB(
+            math.floor(activeColor.R * 0.5), math.floor(activeColor.G * 0.5), math.floor(activeColor.B * 0.5)
+        ) or BoxesCfg['Box Glow']['Bot']
 
-    -- Apply MM2 role colors to boxes
-    if BoxesCfg['Enabled'] and Table['MM2Settings']['Enabled'] then
-        local roleColor = MM2Functions.GetRoleColor(Data['MM2Role'])
-        
-        -- Update box glow with role color
         if BoxesCfg['Box Glow']['Enabled'] then
-            if Objects['BoxGlow'].ImageTransparency ~= 0 then
-                Objects['BoxGlow'].ImageTransparency = 0
-            end
-            
-            local darkerColor = Color3.fromRGB(
-                math.floor(roleColor.R * 0.6),
-                math.floor(roleColor.G * 0.6),
-                math.floor(roleColor.B * 0.6)
-            )
-
-            if Data['LastGlowTop'] ~= roleColor or Data['LastGlowBot'] ~= darkerColor then
+            if Objects['BoxGlow'].ImageTransparency ~= 0 then Objects['BoxGlow'].ImageTransparency = 0 end
+            if Data['LastGlowTop'] ~= glowTop or Data['LastGlowBot'] ~= glowBot then
                 Objects['BoxGlowGradient'].Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, roleColor),
-                    ColorSequenceKeypoint.new(1, darkerColor),
+                    ColorSequenceKeypoint.new(0, glowTop), ColorSequenceKeypoint.new(1, glowBot),
                 })
-                Data['LastGlowTop'] = roleColor
-                Data['LastGlowBot'] = darkerColor
+                Data['LastGlowTop'] = glowTop; Data['LastGlowBot'] = glowBot
             end
-
             local T1 = BoxesCfg['Box Glow']['Transparency'][1]
             local T2 = BoxesCfg['Box Glow']['Transparency'][2]
-
             if Data['LastGlowT1'] ~= T1 or Data['LastGlowT2'] ~= T2 then
                 Objects['BoxGlowGradient'].Transparency = NumSeq({NumKey(0, T1), NumKey(1, T2)})
-                Data['LastGlowT1'] = T1
-                Data['LastGlowT2'] = T2
+                Data['LastGlowT1'] = T1; Data['LastGlowT2'] = T2
             end
         else
-            if Objects['BoxGlow'].ImageTransparency ~= 1 then
-                Objects['BoxGlow'].ImageTransparency = 1
-            end
+            if Objects['BoxGlow'].ImageTransparency ~= 1 then Objects['BoxGlow'].ImageTransparency = 1 end
         end
 
         local BoxType = BoxesCfg['Type']
+        local gradTop = activeColor or BoxesCfg['Gradients']['Top']
+        local gradBot = activeColor and Color3.fromRGB(
+            math.floor(activeColor.R * 0.6), math.floor(activeColor.G * 0.6), math.floor(activeColor.B * 0.6)
+        ) or BoxesCfg['Gradients']['Bot']
 
         if BoxType == "Corner" then
-            if Objects['BoxOutlineHolder'].Visible then
-                Objects['BoxOutlineHolder'].Visible = false
-            end
-            if Objects['BoxInlineHolder'].Visible then
-                Objects['BoxInlineHolder'].Visible = false
-            end
-            if Objects['BoxFill'].Visible then
-                Objects['BoxFill'].Visible = false
-            end
-
-            if not Objects['CornerHolder'].Visible then
-                Objects['CornerHolder'].Visible = true
-            end
-
-            local darkerColor = Color3.fromRGB(
-                math.floor(roleColor.R * 0.6),
-                math.floor(roleColor.G * 0.6),
-                math.floor(roleColor.B * 0.6)
-            )
-
-            for i = 1, 8 do
-                local Line = Objects['Line_' .. i]
-                local Stroke = Line:FindFirstChildOfClass('UIStroke')
-                local LayoutEntry = CornerLayout[i]
-                local LPos, LSize, LAnchor, LRot = LayoutEntry[1], LayoutEntry[2], LayoutEntry[3], LayoutEntry[4]
-
-                Line.Position = LPos
-                Line.Size = LSize
-                Line.AnchorPoint = LAnchor
-                Line.Rotation = LRot
-                Line.BackgroundColor3 = roleColor
-                Line.BackgroundTransparency = 0
-                if Stroke then
-                    Stroke.Color = roleColor
+            if Objects['BoxOutlineHolder'].Visible then Objects['BoxOutlineHolder'].Visible = false end
+            if Objects['BoxInlineHolder'].Visible then Objects['BoxInlineHolder'].Visible = false end
+            if Objects['BoxFill'].Visible then Objects['BoxFill'].Visible = false end
+            if not Objects['CornerHolder'].Visible then Objects['CornerHolder'].Visible = true end
+            if Data['LastGradTop'] ~= gradTop or Data['LastGradBot'] ~= gradBot then
+                for i = 1, 8 do
+                    local Line = Objects['Line_' .. i]
+                    local Stroke = Line:FindFirstChildOfClass('UIStroke')
+                    local LayoutEntry = CornerLayout[i]
+                    local LPos, LSize, LAnchor, LRot = LayoutEntry[1], LayoutEntry[2], LayoutEntry[3], LayoutEntry[4]
+                    Line.Position = LPos; Line.Size = LSize; Line.AnchorPoint = LAnchor; Line.Rotation = LRot
+                    Line.BackgroundColor3 = gradTop; Line.BackgroundTransparency = 0
+                    if Stroke then Stroke.Color = gradTop end
+                    Line.Visible = true
                 end
-                Line.Visible = true
+                Data['LastGradTop'] = gradTop; Data['LastGradBot'] = gradBot
             end
         else
-            if Objects['CornerHolder'].Visible then
-                Objects['CornerHolder'].Visible = false
-            end
-            for i = 1, 8 do
-                if Objects['Line_' .. i].Visible then
-                    Objects['Line_' .. i].Visible = false
-                end
-            end
-
-            if not Objects['BoxOutlineHolder'].Visible then
-                Objects['BoxOutlineHolder'].Visible = true
-            end
-
-            if not Objects['BoxInlineHolder'].Visible then
-                Objects['BoxInlineHolder'].Visible = true
-            end
-
-            local darkerColor = Color3.fromRGB(
-                math.floor(roleColor.R * 0.6),
-                math.floor(roleColor.G * 0.6),
-                math.floor(roleColor.B * 0.6)
-            )
-
-            if Data['LastGradTop'] ~= roleColor or Data['LastGradBot'] ~= darkerColor then
+            if Objects['CornerHolder'].Visible then Objects['CornerHolder'].Visible = false end
+            for i = 1, 8 do if Objects['Line_' .. i].Visible then Objects['Line_' .. i].Visible = false end end
+            if not Objects['BoxOutlineHolder'].Visible then Objects['BoxOutlineHolder'].Visible = true end
+            if not Objects['BoxInlineHolder'].Visible then Objects['BoxInlineHolder'].Visible = true end
+            if Data['LastGradTop'] ~= gradTop or Data['LastGradBot'] ~= gradBot then
                 Objects['BoxInlineGradient'].Color = ColorSequence.new({
-                    ColorSequenceKeypoint.new(0, roleColor),
-                    ColorSequenceKeypoint.new(1, darkerColor),
+                    ColorSequenceKeypoint.new(0, gradTop), ColorSequenceKeypoint.new(1, gradBot),
                 })
-                Data['LastGradTop'] = roleColor
-                Data['LastGradBot'] = darkerColor
+                Data['LastGradTop'] = gradTop; Data['LastGradBot'] = gradBot
             end
-
             if BoxesCfg['Filled']['Enabled'] then
-                if not Objects['BoxFill'].Visible then
-                    Objects['BoxFill'].Visible = true
-                end
-
-                local fillDarker = Color3.fromRGB(
-                    math.floor(roleColor.R * 0.4),
-                    math.floor(roleColor.G * 0.4),
-                    math.floor(roleColor.B * 0.4)
-                )
+                if not Objects['BoxFill'].Visible then Objects['BoxFill'].Visible = true end
+                local fillTop = activeColor or BoxesCfg['Filled']['Top']
+                local fillBot = activeColor and Color3.fromRGB(
+                    math.floor(activeColor.R * 0.3), math.floor(activeColor.G * 0.3), math.floor(activeColor.B * 0.3)
+                ) or BoxesCfg['Filled']['Bot']
                 local FillT1 = BoxesCfg['Filled']['Transparency'][1]
                 local FillT2 = BoxesCfg['Filled']['Transparency'][2]
-
-                if Data['LastFillTop'] ~= roleColor or Data['LastFillBot'] ~= fillDarker then
+                if Data['LastFillTop'] ~= fillTop or Data['LastFillBot'] ~= fillBot then
                     Objects['BoxFillGradient'].Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, roleColor),
-                        ColorSequenceKeypoint.new(1, fillDarker),
+                        ColorSequenceKeypoint.new(0, fillTop), ColorSequenceKeypoint.new(1, fillBot),
                     })
-                    Data['LastFillTop'] = roleColor
-                    Data['LastFillBot'] = fillDarker
+                    Data['LastFillTop'] = fillTop; Data['LastFillBot'] = fillBot
                 end
-
                 if Data['LastFillT1'] ~= FillT1 or Data['LastFillT2'] ~= FillT2 then
                     Objects['BoxFillGradient'].Transparency = NumSeq({NumKey(0, FillT1), NumKey(1, FillT2)})
-                    Data['LastFillT1'] = FillT1
-                    Data['LastFillT2'] = FillT2
+                    Data['LastFillT1'] = FillT1; Data['LastFillT2'] = FillT2
                 end
             else
-                if Objects['BoxFill'].Visible then
-                    Objects['BoxFill'].Visible = false
-                end
+                if Objects['BoxFill'].Visible then Objects['BoxFill'].Visible = false end
             end
         end
     else
-        if Objects['BoxGlow'].ImageTransparency ~= 1 then
-            Objects['BoxGlow'].ImageTransparency = 1
-        end
-
-        if Objects['BoxOutlineHolder'].Visible then
-            Objects['BoxOutlineHolder'].Visible = false
-        end
-
-        if Objects['BoxInlineHolder'].Visible then
-            Objects['BoxInlineHolder'].Visible = false
-        end
-
-        if Objects['BoxFill'].Visible then
-            Objects['BoxFill'].Visible = false
-        end
-
-        if Objects['CornerHolder'].Visible then
-            Objects['CornerHolder'].Visible = false
-        end
-
-        for i = 1, 8 do
-            if Objects['Line_' .. i].Visible then
-                Objects['Line_' .. i].Visible = false
-            end
-        end
+        if Objects['BoxGlow'].ImageTransparency ~= 1 then Objects['BoxGlow'].ImageTransparency = 1 end
+        if Objects['BoxOutlineHolder'].Visible then Objects['BoxOutlineHolder'].Visible = false end
+        if Objects['BoxInlineHolder'].Visible then Objects['BoxInlineHolder'].Visible = false end
+        if Objects['BoxFill'].Visible then Objects['BoxFill'].Visible = false end
+        if Objects['CornerHolder'].Visible then Objects['CornerHolder'].Visible = false end
+        for i = 1, 8 do if Objects['Line_' .. i].Visible then Objects['Line_' .. i].Visible = false end end
     end
 
+    local TextsCfg = Table['Texts']
     if TextsCfg['Name']['Enabled'] then
-        if not Objects['TargetName'].Visible then
-            Objects['TargetName'].Visible = true
-        end
-
+        if not Objects['TargetName'].Visible then Objects['TargetName'].Visible = true end
         local DisplayName = Player.DisplayName
-
         if Data['LastDisplayName'] ~= DisplayName then
-            Objects['TargetName'].Text = DisplayName
-            Data['LastDisplayName'] = DisplayName
+            Objects['TargetName'].Text = DisplayName; Data['LastDisplayName'] = DisplayName
         end
-
-        local NameColor = TextsCfg['Name']['Color']
-        if Table['MM2Settings']['Enabled'] then
-            NameColor = MM2Functions.GetRoleColor(Data['MM2Role'])
-        elseif Table['TeamCheck']['Enabled'] and Table['TeamCheck']['ShowTeammates'] then
-            if Data['IsTeammate'] then
-                NameColor = Color3.fromRGB(0, 255, 0) -- Green for teammates
-            else
-                NameColor = Color3.fromRGB(255, 0, 0) -- Red for enemies
-            end
-        end
-
+        local NameColor = activeColor or TextsCfg['Name']['Color']
         if Data['LastNameColor'] ~= NameColor then
-            Objects['TargetName'].TextColor3 = NameColor
-            Data['LastNameColor'] = NameColor
+            Objects['TargetName'].TextColor3 = NameColor; Data['LastNameColor'] = NameColor
         end
     else
-        if Objects['TargetName'].Visible then
-            Objects['TargetName'].Visible = false
-        end
+        if Objects['TargetName'].Visible then Objects['TargetName'].Visible = false end
     end
 
     if TextsCfg['Distance']['Enabled'] then
-        if not Objects['Distance'].Visible then
-            Objects['Distance'].Visible = true
-        end
-
+        if not Objects['Distance'].Visible then Objects['Distance'].Visible = true end
         if Data['LastDist'] ~= Distance then
-            Objects['Distance'].Text = Format('%dst', Distance)
-            Data['LastDist'] = Distance
+            Objects['Distance'].Text = Format('%dst', Distance); Data['LastDist'] = Distance
         end
-
-        local DistColor = TextsCfg['Distance']['Color']
-
+        local DistColor = activeColor or TextsCfg['Distance']['Color']
         if Data['LastDistColor'] ~= DistColor then
-            Objects['Distance'].TextColor3 = DistColor
-            Data['LastDistColor'] = DistColor
+            Objects['Distance'].TextColor3 = DistColor; Data['LastDistColor'] = DistColor
         end
     else
-        if Objects['Distance'].Visible then
-            Objects['Distance'].Visible = false
-        end
+        if Objects['Distance'].Visible then Objects['Distance'].Visible = false end
     end
 
     local HealthCfg = Table['Bars']['Health Bar']
@@ -1811,153 +1709,85 @@ function Library:Update(Player, Data)
         local Health = Data['Health'] or 0
         local MaxHealth = Data['MaxHealth'] or 100
         local Ratio = Clamp(Health / MaxHealth, 0, 1)
-
-        if not Objects['LeftBarHolder'].Visible then
-            Objects['LeftBarHolder'].Visible = true
-        end
-
-        if not Objects['HealthBarOutline'].Visible then
-            Objects['HealthBarOutline'].Visible = true
-        end
-
+        if not Objects['LeftBarHolder'].Visible then Objects['LeftBarHolder'].Visible = true end
+        if not Objects['HealthBarOutline'].Visible then Objects['HealthBarOutline'].Visible = true end
         if Data['LastRatio'] ~= Ratio then
-            Objects['HealthBar'].Size = Dim2(1, 0, Ratio, 0)
-            Data['LastRatio'] = Ratio
+            Objects['HealthBar'].Size = Dim2(1, 0, Ratio, 0); Data['LastRatio'] = Ratio
         end
-
-        local GradTop = HealthCfg['Top']
-        local GradMid = HealthCfg['Mid']
-        local GradBot = HealthCfg['Bot']
-
-        if Data['LastHealthTop'] ~= GradTop or Data['LastHealthMid'] ~= GradMid or Data['LastHealthBot'] ~= GradBot then
+        local healthTop = activeColor or HealthCfg['Top']
+        local healthMid = activeColor and Color3.fromRGB(
+            math.floor(activeColor.R * 0.8), math.floor(activeColor.G * 0.8), math.floor(activeColor.B * 0.8)
+        ) or HealthCfg['Mid']
+        local healthBot = activeColor and Color3.fromRGB(
+            math.floor(activeColor.R * 0.5), math.floor(activeColor.G * 0.5), math.floor(activeColor.B * 0.5)
+        ) or HealthCfg['Bot']
+        if Data['LastHealthTop'] ~= healthTop or Data['LastHealthMid'] ~= healthMid or Data['LastHealthBot'] ~= healthBot then
             Objects['HealthBarGradient'].Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, GradTop),
-                ColorSequenceKeypoint.new(0.5, GradMid),
-                ColorSequenceKeypoint.new(1, GradBot),
+                ColorSequenceKeypoint.new(0, healthTop),
+                ColorSequenceKeypoint.new(0.5, healthMid),
+                ColorSequenceKeypoint.new(1, healthBot),
             })
-            Data['LastHealthTop'] = GradTop
-            Data['LastHealthMid'] = GradMid
-            Data['LastHealthBot'] = GradBot
+            Data['LastHealthTop'] = healthTop; Data['LastHealthMid'] = healthMid; Data['LastHealthBot'] = healthBot
         end
-
-        if HealthCfg['Enabled'] then
-            if not Objects['HealthBarText'].Visible then
-                Objects['HealthBarText'].Visible = true
-            end
-
-            local FlooredHealth = Floor(Health)
-
-            if Data['LastHealthFloor'] ~= FlooredHealth then
-                Objects['HealthBarText'].Text = Format('%d', FlooredHealth)
-                Objects['HealthBarText'].Position = Dim2(1, -10, 1 - Ratio, 1)
-                Data['LastHealthFloor'] = FlooredHealth
-            end
-        else
-            if Objects['HealthBarText'].Visible then
-                Objects['HealthBarText'].Visible = false
-            end
+        if not Objects['HealthBarText'].Visible then Objects['HealthBarText'].Visible = true end
+        local FlooredHealth = Floor(Health)
+        if Data['LastHealthFloor'] ~= FlooredHealth then
+            Objects['HealthBarText'].Text = Format('%d', FlooredHealth)
+            Objects['HealthBarText'].Position = Dim2(1, -10, 1 - Ratio, 1)
+            Data['LastHealthFloor'] = FlooredHealth
         end
     else
-        if Objects['HealthBarOutline'].Visible then
-            Objects['HealthBarOutline'].Visible = false
-        end
-
-        if Objects['HealthBarText'].Visible then
-            Objects['HealthBarText'].Visible = false
-        end
-
+        if Objects['HealthBarOutline'].Visible then Objects['HealthBarOutline'].Visible = false end
+        if Objects['HealthBarText'].Visible then Objects['HealthBarText'].Visible = false end
         if not ArmorCfg['Enabled'] then
-            if Objects['LeftBarHolder'].Visible then
-                Objects['LeftBarHolder'].Visible = false
-            end
+            if Objects['LeftBarHolder'].Visible then Objects['LeftBarHolder'].Visible = false end
         end
     end
 
     if ArmorCfg['Enabled'] then
         local Ratio = Clamp(Data['Armor'] / Data['MaxArmor'], 0, 1)
-
-        if not Objects['BottomBarHolder'].Visible then
-            Objects['BottomBarHolder'].Visible = true
-        end
-
-        if not Objects['ArmorBarOutline'].Visible then
-            Objects['ArmorBarOutline'].Visible = true
-        end
-
+        if not Objects['BottomBarHolder'].Visible then Objects['BottomBarHolder'].Visible = true end
+        if not Objects['ArmorBarOutline'].Visible then Objects['ArmorBarOutline'].Visible = true end
         if Data['LastArmorRatio'] ~= Ratio then
-            Objects['ArmorBar'].Size = Dim2(Ratio, 0, 1, 0)
-            Data['LastArmorRatio'] = Ratio
+            Objects['ArmorBar'].Size = Dim2(Ratio, 0, 1, 0); Data['LastArmorRatio'] = Ratio
         end
-
-        local GradTop = ArmorCfg['Top']
-        local GradMid = ArmorCfg['Mid']
-        local GradBot = ArmorCfg['Bot']
-
+        local GradTop = ArmorCfg['Top']; local GradMid = ArmorCfg['Mid']; local GradBot = ArmorCfg['Bot']
         if Data['LastArmorTop'] ~= GradTop or Data['LastArmorMid'] ~= GradMid or Data['LastArmorBot'] ~= GradBot then
             Objects['ArmorBarGradient'].Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, GradTop),
                 ColorSequenceKeypoint.new(0.5, GradMid),
                 ColorSequenceKeypoint.new(1, GradBot),
             })
-            Data['LastArmorTop'] = GradTop
-            Data['LastArmorMid'] = GradMid
-            Data['LastArmorBot'] = GradBot
+            Data['LastArmorTop'] = GradTop; Data['LastArmorMid'] = GradMid; Data['LastArmorBot'] = GradBot
         end
-
         if Ratio < 1 then
-            if not Objects['ArmorBarText'].Visible then
-                Objects['ArmorBarText'].Visible = true
-            end
-
+            if not Objects['ArmorBarText'].Visible then Objects['ArmorBarText'].Visible = true end
             local FlooredArmor = Floor(Data['Armor'])
-
             if Data['LastArmorFloor'] ~= FlooredArmor then
-                Objects['ArmorBarText'].Text = Format('%d', FlooredArmor)
-                Data['LastArmorFloor'] = FlooredArmor
+                Objects['ArmorBarText'].Text = Format('%d', FlooredArmor); Data['LastArmorFloor'] = FlooredArmor
             end
         else
-            if Objects['ArmorBarText'].Visible then
-                Objects['ArmorBarText'].Visible = false
-            end
+            if Objects['ArmorBarText'].Visible then Objects['ArmorBarText'].Visible = false end
         end
     else
-        if Objects['BottomBarHolder'].Visible then
-            Objects['BottomBarHolder'].Visible = false
-        end
-
-        if Objects['ArmorBarOutline'].Visible then
-            Objects['ArmorBarOutline'].Visible = false
-        end
-
-        if Objects['ArmorBarText'].Visible then
-            Objects['ArmorBarText'].Visible = false
-        end
+        if Objects['BottomBarHolder'].Visible then Objects['BottomBarHolder'].Visible = false end
+        if Objects['ArmorBarOutline'].Visible then Objects['ArmorBarOutline'].Visible = false end
+        if Objects['ArmorBarText'].Visible then Objects['ArmorBarText'].Visible = false end
     end
 
     local WeaponCfg = TextsCfg['Weapon']
-
     if WeaponCfg['Enabled'] then
-        if not Objects['Weapon'].Visible then
-            Objects['Weapon'].Visible = true
-        end
-
+        if not Objects['Weapon'].Visible then Objects['Weapon'].Visible = true end
         local CurrentTool = Data['CurrentTool'] or 'none'
-
         if Data['LastWeapon'] ~= CurrentTool then
-            Objects['Weapon'].Text = CurrentTool
-            Data['LastWeapon'] = CurrentTool
+            Objects['Weapon'].Text = CurrentTool; Data['LastWeapon'] = CurrentTool
         end
-
-        local WeaponColor = WeaponCfg['Color']
-
+        local WeaponColor = activeColor or WeaponCfg['Color']
         if Data['LastWeaponColor'] ~= WeaponColor then
-            Objects['Weapon'].TextColor3 = WeaponColor
-            Data['LastWeaponColor'] = WeaponColor
+            Objects['Weapon'].TextColor3 = WeaponColor; Data['LastWeaponColor'] = WeaponColor
         end
     else
-        if Objects['Weapon'].Visible then
-            Objects['Weapon'].Visible = false
-        end
+        if Objects['Weapon'].Visible then Objects['Weapon'].Visible = false end
     end
 end
 
@@ -1968,23 +1798,33 @@ do
                 if Data['Objects']['TargetHolder'].Visible then
                     Data['Objects']['TargetHolder'].Visible = false
                 end;
+                if Data['Objects']['TracerLine'].Visible then
+                    Data['Objects']['TracerLine'].Visible = false
+                end;
             end;
             return
         end;
 
         local Now = os.clock();
-
-        if Now - Updates < Frame then
-            return;
-        end;
-
+        if Now - Updates < Frame then return; end;
         Updates = Now;
         CameraPosition = Camera.CFrame.Position;
+        MM2Handler:SyncColors()
 
         for Player, Data in Library['Cache'] do
             Library:Update(Player, Data)
         end
     end)
+    
+    if Table['MM2Settings']['PreRoundDetection'] then
+        Library:CreateThreads('PreRoundDetection', RunService.Heartbeat, function()
+            local now = os.clock()
+            if now - (MM2Handler.RoundStartTime or 0) > 2 then
+                MM2Handler:DetectPreRoundRoles()
+                MM2Handler.RoundStartTime = now
+            end
+        end)
+    end
 end
 
 do
@@ -1998,33 +1838,22 @@ do
 
     Library:CreateThreads('PlayerRemoving', Players.PlayerRemoving, function(Player)
         Library:RemoveTarget(Player)
+        MM2Handler.RoleCache[Player] = nil
+        MM2Handler.PreRoundCache[Player] = nil
     end)
 end
 
 do
     function Library:Unload()
-        for Player in self['Cache'] do
-            self:RemoveTarget(Player);
-        end;
-
-        for _, Conn in self['Connections'] do
-            Conn:Disconnect();
-        end;
-
+        for Player in self['Cache'] do self:RemoveTarget(Player); end;
+        for _, Conn in self['Connections'] do Conn:Disconnect(); end;
         Clear(self['Connections']);
-
-        for _, Conn in self['Threads'] do
-            Conn:Disconnect();
-        end;
-
+        for _, Conn in self['Threads'] do Conn:Disconnect(); end;
         Clear(self['Threads']);
-
-        if self['Holder'] then
-            self['Holder']:Destroy();
-            self['Holder'] = nil;
-        end;
-
+        if self['Holder'] then self['Holder']:Destroy(); self['Holder'] = nil; end;
         Clear(self['Cache']);
+        Clear(MM2Handler.RoleCache);
+        Clear(MM2Handler.PreRoundCache);
     end
 end
 
