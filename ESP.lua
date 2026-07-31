@@ -179,7 +179,6 @@ end
 
 function MM2Handler:DetectPreRoundRoles()
     local preRoundData = {}
-    
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local role = self:DetectRole(player)
@@ -190,7 +189,6 @@ function MM2Handler:DetectPreRoundRoles()
             }
         end
     end
-    
     self.PreRoundCache = preRoundData
     return preRoundData
 end
@@ -202,14 +200,8 @@ function MM2Handler:GetPlayerRole(Player)
             return cachedRole.role
         end
     end
-    
     local role = self:DetectRole(Player)
-    
-    self.RoleCache[Player] = {
-        role = role,
-        timestamp = os.clock()
-    }
-    
+    self.RoleCache[Player] = {role = role, timestamp = os.clock()}
     return role
 end
 
@@ -219,13 +211,11 @@ end
 
 function MM2Handler:ShouldShowPlayer(Role, Settings)
     if not Settings['Enabled'] then return true end
-    
     if Role == self.Roles.SHERIFF and not Settings['ShowSheriff'] then return false
     elseif Role == self.Roles.MURDERER and not Settings['ShowMurderer'] then return false
     elseif Role == self.Roles.INNOCENT and not Settings['ShowInnocent'] then return false
     elseif Role == self.Roles.UNKNOWN and not Settings['ShowUnknown'] then return false
     end
-    
     return true
 end
 
@@ -244,7 +234,6 @@ getgenv().Library = {
     ['Threads'] = {},
     ['Connections'] = {},
     ['MM2Handler'] = MM2Handler,
-    ['Tracers'] = {},
 
     ['Table'] = {
         ['Enabled'] = true,
@@ -257,9 +246,8 @@ getgenv().Library = {
 
         ['Tracers'] = {
             ['Enabled'] = true,
-            ['Transparency'] = 0.5,
-            ['Thickness'] = 1,
-            ['Color'] = Color3.fromRGB(255, 255, 255),
+            ['Transparency'] = 0.3,
+            ['Thickness'] = 1.5,
             ['UseRoleColors'] = true,
             ['Origin'] = "Bottom",
         },
@@ -457,19 +445,24 @@ function Library:InitEsp(Data)
         Objects["TracerLine"] = self:CreateObjects("Frame", {
             Parent = self.Holder,
             Visible = false,
-            BackgroundTransparency = 0,
+            BackgroundTransparency = 0.7,
             BackgroundColor3 = Color3.fromRGB(255, 255, 255),
             BorderSizePixel = 0,
-            Size = Dim2(0, 1, 0, 0),
+            Size = Dim2(0, 0, 0, 0),
             Position = Dim2(0, 0, 0, 0),
             ZIndex = 1,
         })
 
         Objects["TracerGradient"] = self:CreateObjects("UIGradient", {
             Parent = Objects["TracerLine"],
+            Rotation = 90,
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255)),
+            }),
             Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0),
-                NumberSequenceKeypoint.new(1, 0.5),
+                NumberSequenceKeypoint.new(0, 0.7),
+                NumberSequenceKeypoint.new(1, 0.95),
             }),
         })
 
@@ -1208,62 +1201,24 @@ function Library:AddTarget(Player)
     if self.Cache[Player] then return end;
 
     local Data = {
-        ['Player'] = Player,
-        ['Objects'] = {},
-        ['Conns'] = {},
-        ['Character'] = nil,
-        ['RootPart'] = nil,
-        ['Humanoid'] = nil,
-        ['Children'] = nil,
-        ['Health'] = 0,
-        ['MaxHealth'] = 100,
-        ['Armor'] = 100,
-        ['MaxArmor'] = 100,
-        ['CurrentTool'] = nil,
-        ['Alive'] = false,
-        ['LastW'] = nil,
-        ['LastH'] = nil,
-        ['LastX'] = nil,
-        ['LastY'] = nil,
-        ['WalkActive'] = false,
-        ['JumpActive'] = false,
-        ['FallingActive'] = false,
-        ['SwimmingActive'] = false,
+        ['Player'] = Player, ['Objects'] = {}, ['Conns'] = {},
+        ['Character'] = nil, ['RootPart'] = nil, ['Humanoid'] = nil,
+        ['Children'] = nil, ['Health'] = 0, ['MaxHealth'] = 100,
+        ['Armor'] = 100, ['MaxArmor'] = 100, ['CurrentTool'] = nil,
+        ['Alive'] = false, ['LastW'] = nil, ['LastH'] = nil,
+        ['LastX'] = nil, ['LastY'] = nil, ['WalkActive'] = false,
+        ['JumpActive'] = false, ['FallingActive'] = false, ['SwimmingActive'] = false,
         ['IncludeAccessories'] = Table['Boxes']['Bounding Box']['IncludeAcsessories'],
-        ['LastGlowTop'] = nil,
-        ['LastGlowBot'] = nil,
-        ['LastGlowT1'] = nil,
-        ['LastGlowT2'] = nil,
-        ['LastGradTop'] = nil,
-        ['LastGradBot'] = nil,
-        ['LastFillTop'] = nil,
-        ['LastFillBot'] = nil,
-        ['LastFillT1'] = nil,
-        ['LastFillT2'] = nil,
-        ['LastDist'] = nil,
-        ['LastDistColor'] = nil,
-        ['LastDisplayName'] = nil,
-        ['LastNameColor'] = nil,
-        ['LastHealthTop'] = nil,
-        ['LastHealthMid'] = nil,
-        ['LastHealthBot'] = nil,
-        ['LastHealthFloor'] = nil,
-        ['LastRatio'] = nil,
-        ['LastArmorTop'] = nil,
-        ['LastArmorMid'] = nil,
-        ['LastArmorBot'] = nil,
-        ['LastArmorFloor'] = nil,
-        ['LastArmorRatio'] = nil,
-        ['LastWeapon'] = nil,
-        ['LastWeaponColor'] = nil,
-        ['IsTeammate'] = false,
-        ['MM2Role'] = MM2Handler.Roles.UNKNOWN,
-        ['LastRole'] = nil,
-        ['RoleColor'] = MM2Handler.Colors.Unknown,
-        ['LastColorUpdate'] = 0,
-        ['TracerFrom'] = nil,
-        ['TracerTo'] = nil,
-        ['LastTracerColor'] = nil,
+        ['LastGlowTop'] = nil, ['LastGlowBot'] = nil, ['LastGlowT1'] = nil, ['LastGlowT2'] = nil,
+        ['LastGradTop'] = nil, ['LastGradBot'] = nil, ['LastFillTop'] = nil, ['LastFillBot'] = nil,
+        ['LastFillT1'] = nil, ['LastFillT2'] = nil, ['LastDist'] = nil, ['LastDistColor'] = nil,
+        ['LastDisplayName'] = nil, ['LastNameColor'] = nil, ['LastHealthTop'] = nil,
+        ['LastHealthMid'] = nil, ['LastHealthBot'] = nil, ['LastHealthFloor'] = nil,
+        ['LastRatio'] = nil, ['LastArmorTop'] = nil, ['LastArmorMid'] = nil,
+        ['LastArmorBot'] = nil, ['LastArmorFloor'] = nil, ['LastArmorRatio'] = nil,
+        ['LastWeapon'] = nil, ['LastWeaponColor'] = nil, ['IsTeammate'] = false,
+        ['MM2Role'] = MM2Handler.Roles.UNKNOWN, ['LastRole'] = nil,
+        ['RoleColor'] = MM2Handler.Colors.Unknown, ['LastColorUpdate'] = 0,
     }
     
     self:InitEsp(Data);
@@ -1357,12 +1312,9 @@ function Library:AddTarget(Player)
             if Data['Conns']['MoveDir'] then Data['Conns']['MoveDir']:Disconnect(); end;
             if Data['Conns']['StateChange'] then Data['Conns']['StateChange']:Disconnect(); end;
             local Objects = Data['Objects']
-            Data['JumpActive'] = false;
-            Data['WalkActive'] = false;
-            Data['FallingActive'] = false;
-            Data['SwimmingActive'] = false;
-            Objects['WalkFlag'].Visible = false;
-            Objects['JumpFlag'].Visible = false;
+            Data['JumpActive'] = false; Data['WalkActive'] = false;
+            Data['FallingActive'] = false; Data['SwimmingActive'] = false;
+            Objects['WalkFlag'].Visible = false; Objects['JumpFlag'].Visible = false;
             Objects['SwimmingFlag'].Visible = false;
             Data['Conns']['MoveDir'] = Humanoid:GetPropertyChangedSignal('MoveDirection'):Connect(function()
                 local Walking = Humanoid.MoveDirection ~= ZeroVector3;
@@ -1372,8 +1324,7 @@ function Library:AddTarget(Player)
                     else Objects['WalkFlag'].LayoutOrder = 1; Objects['JumpFlag'].LayoutOrder = 2; end
                     Objects['WalkFlag'].Visible = Table['Flags']['Walking']['Enabled']
                 elseif not Walking and Data['WalkActive'] then
-                    Data['WalkActive'] = false;
-                    Objects['WalkFlag'].Visible = false;
+                    Data['WalkActive'] = false; Objects['WalkFlag'].Visible = false;
                     if Data['JumpActive'] then Objects['JumpFlag'].LayoutOrder = 1; end
                 end
             end)
@@ -1384,16 +1335,14 @@ function Library:AddTarget(Player)
                     else Objects['JumpFlag'].LayoutOrder = 1; Objects['WalkFlag'].LayoutOrder = 2; end
                     Objects['JumpFlag'].Visible = Table['Flags']['Jumping']['Enabled']
                 elseif NewState ~= Enum.HumanoidStateType.Jumping and Data['JumpActive'] then
-                    Data['JumpActive'] = false;
-                    Objects['JumpFlag'].Visible = false;
+                    Data['JumpActive'] = false; Objects['JumpFlag'].Visible = false;
                     if Data['WalkActive'] then Objects['WalkFlag'].LayoutOrder = 1; end
                 end
                 if NewState == Enum.HumanoidStateType.Swimming and not Data['SwimmingActive'] then
                     Data['SwimmingActive'] = true;
                     Objects['SwimmingFlag'].Visible = Table['Flags']['Swimming']['Enabled']
                 elseif NewState ~= Enum.HumanoidStateType.Swimming and Data['SwimmingActive'] then
-                    Data['SwimmingActive'] = false;
-                    Objects['SwimmingFlag'].Visible = false;
+                    Data['SwimmingActive'] = false; Objects['SwimmingFlag'].Visible = false;
                 end
             end)
         end
@@ -1402,15 +1351,10 @@ function Library:AddTarget(Player)
 
     local CharacterHandler = {}; do
         function CharacterHandler.OnCharacter(Character)
-            Data['Character'] = Character;
-            Data['RootPart'] = nil;
-            Data['Humanoid'] = nil;
-            Data['Children'] = nil;
-            Data['Alive'] = false;
-            Data['WalkActive'] = false;
-            Data['JumpActive'] = false;
-            Data['FallingActive'] = false;
-            Data['SwimmingActive'] = false;
+            Data['Character'] = Character; Data['RootPart'] = nil;
+            Data['Humanoid'] = nil; Data['Children'] = nil; Data['Alive'] = false;
+            Data['WalkActive'] = false; Data['JumpActive'] = false;
+            Data['FallingActive'] = false; Data['SwimmingActive'] = false;
             if not Character or not Character.Parent then return; end;
             local RootPart = FindFirstChild(Character, "HumanoidRootPart");
             if not RootPart then RootPart = Character:WaitForChild('HumanoidRootPart', 10); end
@@ -1418,11 +1362,9 @@ function Library:AddTarget(Player)
             if not Humanoid then Humanoid = Character:WaitForChild('Humanoid', 10); end;
             if not RootPart or not Humanoid then return; end;
             if not Character.Parent then return; end;
-            Data['RootPart'] = RootPart;
-            Data['Humanoid'] = Humanoid;
+            Data['RootPart'] = RootPart; Data['Humanoid'] = Humanoid;
             Data['MM2Role'] = MM2Handler:GetPlayerRole(Player)
-            Data['BindChildren'](Character);
-            Data['BindHealth'](Humanoid);
+            Data['BindChildren'](Character); Data['BindHealth'](Humanoid);
             Data['BindFlags'](Humanoid);
         end
         Data['Conns']['CharAdded'] = Player.CharacterAdded:Connect(function(Character)
@@ -1440,11 +1382,11 @@ function Library:RemoveTarget(Player)
     for _, Connections in Data['Conns'] do Connections:Disconnect() end;
     Clear(Data['Conns']);
     if Data['Objects']['TargetHolder'] then Data['Objects']['TargetHolder']:Destroy(); end;
-    Clear(Data['Objects']);
-    self['Cache'][Player] = nil;
+    if Data['Objects']['TracerLine'] then Data['Objects']['TracerLine']:Destroy(); end;
+    Clear(Data['Objects']); self['Cache'][Player] = nil;
 end
 
-function Library:UpdateTracer(Data, ScreenPos)
+function Library:UpdateTracer(Data, RootScreen, BottomScreen)
     local Objects = Data['Objects']
     local TracerCfg = Table['Tracers']
     
@@ -1457,40 +1399,51 @@ function Library:UpdateTracer(Data, ScreenPos)
     
     local tracerColor = Data['RoleColor']
     if not TracerCfg['UseRoleColors'] or not Table['MM2Settings']['Enabled'] then
-        tracerColor = TracerCfg['Color']
+        tracerColor = Color3.fromRGB(255, 255, 255)
     end
     
     local viewportSize = Camera.ViewportSize
-    local tracerOrigin
+    local startPos, endPos
     
     if TracerCfg['Origin'] == "Bottom" then
-        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y)
+        startPos = NewVector2(viewportSize.X / 2, viewportSize.Y)
+        endPos = NewVector2(BottomScreen.X, BottomScreen.Y)
     elseif TracerCfg['Origin'] == "Top" then
-        tracerOrigin = NewVector2(viewportSize.X / 2, 0)
+        startPos = NewVector2(viewportSize.X / 2, 0)
+        endPos = NewVector2(RootScreen.X, RootScreen.Y)
     elseif TracerCfg['Origin'] == "Center" then
-        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y / 2)
+        startPos = NewVector2(viewportSize.X / 2, viewportSize.Y / 2)
+        endPos = NewVector2(RootScreen.X, RootScreen.Y)
+    elseif TracerCfg['Origin'] == "Mouse" then
+        local mouse = LocalPlayer:GetMouse()
+        startPos = NewVector2(mouse.X, mouse.Y + 36)
+        endPos = NewVector2(RootScreen.X, RootScreen.Y)
     else
-        tracerOrigin = NewVector2(viewportSize.X / 2, viewportSize.Y)
+        startPos = NewVector2(viewportSize.X / 2, viewportSize.Y)
+        endPos = NewVector2(BottomScreen.X, BottomScreen.Y)
     end
     
-    local targetPos = NewVector2(ScreenPos.X, ScreenPos.Y)
-    local direction = targetPos - tracerOrigin
+    local direction = endPos - startPos
     local length = direction.Magnitude
-    
-    if length <= 0 then
-        Objects['TracerLine'].Visible = false
-        return
-    end
-    
     local angle = math.deg(math.atan2(direction.Y, direction.X))
     
     Objects['TracerLine'].Visible = true
     Objects['TracerLine'].BackgroundColor3 = tracerColor
     Objects['TracerLine'].BackgroundTransparency = TracerCfg['Transparency']
-    
-    Objects['TracerLine'].Position = Dim2(0, tracerOrigin.X, 0, tracerOrigin.Y)
+    Objects['TracerLine'].Position = Dim2(0, startPos.X, 0, startPos.Y)
     Objects['TracerLine'].Size = Dim2(0, length, 0, TracerCfg['Thickness'])
     Objects['TracerLine'].Rotation = angle
+    
+    local darkerColor = Color3.fromRGB(
+        math.floor(tracerColor.R * 0.3),
+        math.floor(tracerColor.G * 0.3),
+        math.floor(tracerColor.B * 0.3)
+    )
+    
+    Objects['TracerGradient'].Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, tracerColor),
+        ColorSequenceKeypoint.new(1, darkerColor),
+    })
     
     Objects['TracerGradient'].Transparency = NumberSequence.new({
         NumberSequenceKeypoint.new(0, TracerCfg['Transparency']),
@@ -1537,6 +1490,10 @@ function Library:Update(Player, Data)
     end
 
     local RootScreen, OnScreen = WorldToViewportPoint(Camera, RootPos)
+    
+    local bottomPos = RootPos - NewVector3(0, 3, 0)
+    local BottomScreen, BottomOnScreen = WorldToViewportPoint(Camera, bottomPos)
+    
     local W, H, X, Y, OnScreenBox = self:CalculateBox(Data)
     
     if not OnScreen or not W then
@@ -1549,7 +1506,7 @@ function Library:Update(Player, Data)
     
     if not Objects['TargetHolder'].Visible then Objects['TargetHolder'].Visible = true end
     
-    self:UpdateTracer(Data, RootScreen)
+    self:UpdateTracer(Data, RootScreen, BottomScreen)
 
     local DirtySizes = Data['LastW'] ~= W or Data['LastH'] ~= H
     local DirtyPosition = Data['LastX'] ~= X or Data['LastY'] ~= Y
