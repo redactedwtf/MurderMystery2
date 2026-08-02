@@ -130,15 +130,15 @@ Library.Theme = table.clone(Themes.Dark)
 DeriveTheme()
 Library.CurrentTheme = "Dark"
 Library.PreviousTheme = "Dark"
-Library.Flags = { }
-Library.Threads = { }
-Library.Connections = { }
-Library.ThemingStuff = { }
-Library.ThemeMap = { }
-Library.OpenFrames = { }
-Library.Windows = { }
+Library.Flags = {}
+Library.Threads = {}
+Library.Connections = {}
+Library.ThemingStuff = {}
+Library.ThemeMap = {}
+Library.OpenFrames = {}
+Library.Windows = {}
 Library.MenuKeybind = tostring(Enum.KeyCode.RightControl)
-Library.SetFlags = { }
+Library.SetFlags = {}
 Library.Directory = "Arcane"
 Library.ConfigFolder = "Arcane/Configs"
 Library.ThemeKeys = { "Background", "Topbar", "Section", "Element", "Accent", "Text", "DimText", "Border" }
@@ -162,15 +162,11 @@ function Library:Create(Class, Properties)
     for Property, Value in Properties do
         if Property == "FontFace" then
             Data.Instance.FontFace = Library.Font
-            continue
-        end
-
-        if Property == "Name" then
+        elseif Property == "Name" then
             Data.Instance.Name = "\0"
-            continue
+        else
+            Data.Instance[Property] = Value
         end
-
-        Data.Instance[Property] = Value
     end
 
     return setmetatable(Data, Library)
@@ -224,7 +220,7 @@ if isfolder and not isfolder(Library.Directory) then makefolder(Library.Director
 if isfolder and not isfolder(Library.ConfigFolder) then makefolder(Library.ConfigFolder) end
 
 function Library:GetConfig()
-    local Config = { }
+    local Config = {}
     for Index, Value in Library.Flags do
         if typeof(Value) == "Color3" then
             Config[Index] = { __color = Value:ToHex() }
@@ -233,7 +229,7 @@ function Library:GetConfig()
         end
     end
 
-    local ThemeColors = { }
+    local ThemeColors = {}
     for Key, Color in Library.Theme do
         if typeof(Color) == "Color3" then
             ThemeColors[Key] = Color:ToHex()
@@ -270,7 +266,7 @@ function Library:LoadConfig(Config)
 end
 
 function Library:GetConfigsList(Element)
-    local List = { }
+    local List = {}
     for _, File in listfiles(Library.ConfigFolder) do
         if File:sub(-5) == ".json" then
             local Name = File:match("([^/\\]+)%.json$")
@@ -431,7 +427,7 @@ end
 function Library:MakeDraggable(Handle)
     local Gui = Self.Instance
     Handle = Handle or Gui
-    
+
     if IsMobileDevice then
         return
     end
@@ -500,15 +496,11 @@ function Library:Unload()
 
     if Library.Holder then Library.Holder.Instance:Destroy() end
     if Library.UnusedHolder then Library.UnusedHolder.Instance:Destroy() end
-    if Library.MobileControls then
-        if Library.MobileControls.ToggleButton then Library.MobileControls.ToggleButton.Instance:Destroy() end
-        if Library.MobileControls.LockButton then Library.MobileControls.LockButton.Instance:Destroy() end
-    end
 
     getgenv().Arcane = nil
 end
 
-local CustomFont = { }
+local CustomFont = {}
 do
     function CustomFont:New(Name, Weight, Style, Data)
         if not isfile(Name .. ".ttf") then
@@ -543,7 +535,7 @@ end
 
 Library.Holder = Library:Create("ScreenGui", {
     Parent = gethui(),
-    Name = "\0",
+    Name = "ArcaneUI",
     ZIndexBehavior = Enum.ZIndexBehavior.Global,
     ResetOnSpawn = false,
     IgnoreGuiInset = true
@@ -551,14 +543,14 @@ Library.Holder = Library:Create("ScreenGui", {
 
 Library.UnusedHolder = Library:Create("ScreenGui", {
     Parent = gethui(),
-    Name = "\0",
+    Name = "ArcaneUI_Unused",
     Enabled = false,
     ResetOnSpawn = false
 })
 
 Library.NotifHolder = Library:Create("Frame", {
     Parent = Library.Holder.Instance,
-    Name = "\0",
+    Name = "NotificationHolder",
     AnchorPoint = Vector2.new(1, 0),
     BackgroundTransparency = 1,
     Position = UDim2.new(1, 0, 0, GuiInset),
@@ -607,7 +599,7 @@ Library:Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize")
 end)
 
 function Library:Notification(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Name = Params.Name or Params.name or "Notification"
     local Description = Params.Description or Params.description or ""
@@ -616,7 +608,7 @@ function Library:Notification(Params)
     local Accent = Params.Color or Params.color or Library.Theme.Accent
 
     local Height = IsMobile and 65 or 73
-    local Items = { }
+    local Items = {}
 
     Items.Notification = Library:Create("Frame", {
         Parent = Library.NotifHolder.Instance,
@@ -718,7 +710,7 @@ function Library:Notification(Params)
         CornerRadius = UDim.new(1, 0)
     })
 
-    local Fades = { }
+    local Fades = {}
 
     for _, Value in Items do
         local Object = Value.Instance
@@ -777,7 +769,7 @@ function Library:Tooltip(Text)
     if IsMobile then return end
     if not Object or Text == nil or Text == "" then return end
 
-    local Items = { }
+    local Items = {}
 
     Items.Tooltip = Library:Create("Frame", {
         Parent = Library.Holder.Instance,
@@ -861,18 +853,18 @@ function Library:Tooltip(Text)
 end
 
 function Library:Window(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Window = {
         Name = Params.Name or Params.name or "ARCANE",
         User = Params.User or Params.user or LocalPlayer.Name,
         Logo = Params.Logo or Params.logo or "72939878637463",
         IsOpen = true,
-        Pages = { },
-        Items = { }
+        Pages = {},
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
 
     local Scale = Library:GetScreenScale()
     local Viewport = workspace.CurrentCamera.ViewportSize
@@ -988,7 +980,7 @@ function Library:Window(Params)
         SortOrder = Enum.SortOrder.LayoutOrder
     })
 
-    local ThemeButtons = { }
+    local ThemeButtons = {}
 
     local function MakeThemeButton(Icon, ThemeName)
         local Button = Library:Create("TextButton", {
@@ -1106,12 +1098,6 @@ function Library:Window(Params)
         if Items.MobileText then
             Items.MobileText.Instance.Text = Bool and "Close" or "Open"
         end
-        if Library.MobileControls and Library.MobileControls.ToggleButton then
-            local Icon = Library.MobileControls.ToggleButton.Instance:FindFirstChild("Icon")
-            if Icon then
-                ApplyIcon(Icon, Bool and "x" or "menu")
-            end
-        end
     end
 
     function Window:Center()
@@ -1123,11 +1109,11 @@ function Library:Window(Params)
     end
 
     function Window:Watermark(Params)
-        Params = Params or { }
+        Params = Params or {}
         local Title = Params.Title or Params.title or Window.Name
         local Icon = Params.Icon or Params.icon or Window.Logo
 
-        local WItems = { }
+        local WItems = {}
 
         WItems.Holder = Library:Create("Frame", {
             Parent = Library.Holder.Instance,
@@ -1339,7 +1325,7 @@ function Library:Window(Params)
 end
 
 local function MakeTab(Holder, Name, Icon)
-    local Tab = { }
+    local Tab = {}
 
     Tab.Button = Library:Create("TextButton", {
         Parent = Holder,
@@ -1392,19 +1378,19 @@ local function MakeTab(Holder, Name, Icon)
 end
 
 function Library:Page(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Page = {
         Name = Params.Name or Params.name or "Page",
         Icon = Params.Icon or Params.icon or "swords",
         Window = Self,
-        SubPages = { },
+        SubPages = {},
         Active = false,
         Debounce = false,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local Tab = MakeTab(Page.Window.Items.PagesHolder.Instance, Page.Name, Page.Icon)
     Items.Tab = Tab.Button
     Items.Icon = Tab.Icon
@@ -1531,7 +1517,7 @@ function Library:Page(Params)
 end
 
 function Library:SubPage(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local SubPage = {
         Name = Params.Name or Params.name or "SubPage",
@@ -1540,12 +1526,12 @@ function Library:SubPage(Params)
         Page = Self,
         Active = false,
         Debounce = false,
-        ColumnsData = { },
-        Sections = { },
-        Items = { }
+        ColumnsData = {},
+        Sections = {},
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local Tab = MakeTab(SubPage.Page.Items.SubPagesHolder.Instance, SubPage.Name, SubPage.Icon)
     Items.Tab = Tab.Button
     Items.Icon = Tab.Icon
@@ -1672,16 +1658,16 @@ function Library:SubPage(Params)
 end
 
 function Library:Section(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Section = {
         Name = Params.Name or Params.name or "Section",
         Side = Params.Side or Params.side or 1,
         LastDivider = nil,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
 
     Items.Section = Library:Create("Frame", {
         Parent = Self.ColumnsData[Section.Side].Instance,
@@ -1735,7 +1721,7 @@ function Library:Section(Params)
             table.insert(Shell, { Obj = Items.Stroke.Instance, Prop = "Transparency", Orig = Items.Stroke.Instance.Transparency })
         end
 
-        local Elements = { }
+        local Elements = {}
         for _, Obj in ContentInst:GetDescendants() do
             local Props = Library:GetTweenProperty(Obj)
             if Props then
@@ -1812,7 +1798,7 @@ local function AddDivider(Section, Parent)
 end
 
 function Library:Toggle(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Toggle = {
         Name = Params.Name or Params.name or "Toggle",
@@ -1821,10 +1807,10 @@ function Library:Toggle(Params)
         Tooltip = Params.Tooltip or Params.tooltip,
         Flag = Params.Flag or Params.flag,
         Value = false,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 40 or 35
 
     Items.Holder = Library:Create("Frame", {
@@ -1944,7 +1930,7 @@ function Library:Toggle(Params)
 end
 
 function Library:Slider(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Slider = {
         Name = Params.Name or Params.name or "Slider",
@@ -1958,10 +1944,10 @@ function Library:Slider(Params)
         Flag = Params.Flag or Params.flag,
         Value = 0,
         Sliding = false,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 52 or 48
 
     Items.Holder = Library:Create("Frame", {
@@ -2137,11 +2123,11 @@ function Library:Slider(Params)
 end
 
 function Library:Dropdown(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Dropdown = {
         Name = Params.Name or Params.name or "Dropdown",
-        Options = Params.Items or Params.items or { },
+        Options = Params.Items or Params.items or {},
         Default = Params.Default or Params.default,
         Multi = Params.Multi or Params.multi or false,
         Callback = Params.Callback or Params.callback or function() end,
@@ -2151,14 +2137,14 @@ function Library:Dropdown(Params)
         Value = nil,
         IsOpen = false,
         Debounce = false,
-        OptionData = { },
-        Order = { },
-        Items = { }
+        OptionData = {},
+        Order = {},
+        Items = {}
     }
 
-    if Dropdown.Multi then Dropdown.Value = { } end
+    if Dropdown.Multi then Dropdown.Value = {} end
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 65 or 60
 
     Items.Holder = Library:Create("Frame", {
@@ -2443,7 +2429,7 @@ function Library:Dropdown(Params)
     end
 
     function Dropdown:RefreshCorners()
-        local Visible = { }
+        local Visible = {}
         for _, Data in Dropdown.Order do
             if Data.Row.Instance.Visible then
                 table.insert(Visible, Data)
@@ -2587,16 +2573,16 @@ function Library:Dropdown(Params)
 end
 
 function Library:Button(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Button = {
         Name = Params.Name or Params.name or "Button",
         Callback = Params.Callback or Params.callback or function() end,
         Tooltip = Params.Tooltip or Params.tooltip,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 50 or 46
 
     Items.Holder = Library:Create("Frame", {
@@ -2667,7 +2653,7 @@ function Library:Button(Params)
 end
 
 function Library:Textbox(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Textbox = {
         Name = Params.Name or Params.name or "Textbox",
@@ -2678,10 +2664,10 @@ function Library:Textbox(Params)
         Tooltip = Params.Tooltip or Params.tooltip,
         Flag = Params.Flag or Params.flag,
         Value = "",
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 65 or 60
 
     Items.Holder = Library:Create("Frame", {
@@ -2783,7 +2769,7 @@ function Library:Textbox(Params)
 end
 
 function Library:List(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local List = {
         Name = Params.Name or Params.name or "List",
@@ -2791,12 +2777,12 @@ function Library:List(Params)
         Callback = Params.Callback or Params.callback or function() end,
         Tooltip = Params.Tooltip or Params.tooltip,
         Value = nil,
-        OptionData = { },
-        Order = { },
-        Items = { }
+        OptionData = {},
+        Order = {},
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 190 or 178
 
     Items.Holder = Library:Create("Frame", {
@@ -3009,7 +2995,7 @@ function Library:List(Params)
         return List.Value
     end
 
-    for _, Option in (Params.Items or Params.items or { }) do
+    for _, Option in (Params.Items or Params.items or {}) do
         List:AddOption(Option)
     end
 
@@ -3019,7 +3005,7 @@ function Library:List(Params)
 end
 
 function Library:Colorpicker(Params)
-    Params = Params or { }
+    Params = Params or {}
 
     local Colorpicker = {
         Name = Params.Name or Params.name or "Colorpicker",
@@ -3032,10 +3018,10 @@ function Library:Colorpicker(Params)
         Color = Color3.fromRGB(255, 255, 255),
         IsOpen = false,
         Debounce = false,
-        Items = { }
+        Items = {}
     }
 
-    local Items = { }
+    local Items = {}
     local ElementHeight = IsMobile and 40 or 35
 
     Items.Holder = Library:Create("Frame", {
@@ -3533,7 +3519,7 @@ function Library:Config()
 end
 
 function Library:Theming()
-    local Pickers = { }
+    local Pickers = {}
 
     Self:Dropdown({
         Name = "Preset Theme",
@@ -3553,15 +3539,11 @@ function Library:Theming()
             Default = Library.Theme[Key],
             Flag = "Theme" .. Key,
             Callback = function(Color)
-                Library:ChangeTheme(Key, Color)
+                Library:Theme[Key] = Color
+                Library:ApplyTheme()
             end
         })
     end
-end
-
-function Library:ChangeTheme(Key, Color)
-    Library.Theme[Key] = Color
-    Library:ApplyTheme()
 end
 
 return Library
